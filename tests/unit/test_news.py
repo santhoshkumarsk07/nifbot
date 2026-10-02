@@ -133,7 +133,9 @@ def _scored(title: str, sent: float, impact: str, at: datetime) -> ScoredNews:
 
 def test_store_and_score(tmp_path: Path) -> None:
     conn = connect(tmp_path / "db" / "n.sqlite3")
-    assert os.stat(tmp_path / "db" / "n.sqlite3").st_mode & 0o077 == 0
+    if os.name == "posix":
+        assert os.stat(tmp_path / "db" / "n.sqlite3").st_mode & 0o077 == 0
+
     store = NewsStore(conn)
     a = _scored("aaa", 0.8, "high", NOW - timedelta(hours=2))
     b = _scored("bbb", -0.5, "medium", NOW)

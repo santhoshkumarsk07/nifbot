@@ -56,11 +56,16 @@ def test_single_chat_id_int(monkeypatch: pytest.MonkeyPatch) -> None:
     assert Secrets(_env_file=None).telegram_allowed_chat_ids == [5]
 
 
+import os
+
+
 def test_insecure_permissions(tmp_path: Path) -> None:
     env = tmp_path / ".env"
     assert not insecure_permissions(env)
-    env.write_text("X=1")
-    env.chmod(0o644)
-    assert insecure_permissions(env)
-    env.chmod(0o600)
-    assert not insecure_permissions(env)
+    if os.name == "posix":
+        env.write_text("X=1")
+        env.chmod(0o644)
+        assert insecure_permissions(env)
+        env.chmod(0o600)
+        assert not insecure_permissions(env)
+
