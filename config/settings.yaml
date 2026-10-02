@@ -1,0 +1,44 @@
+# Non-secret settings. Secrets come only from environment variables / .env.
+
+capital_inr: 100000          # PLACEHOLDER: set your real trading capital before paper/live mode
+
+risk:
+  max_loss_per_trade_pct: 1.0    # loss at stop <= this % of capital
+  daily_loss_cap_pct: 3.0
+  max_consecutive_losses: 2
+  max_calls_per_day: 3
+  max_open_calls: 2
+  no_new_calls_before: "09:30"
+  no_new_calls_after: "14:45"
+  flatten_alert_at: "15:10"
+  stale_data_seconds: 120        # kill switch threshold
+
+session:
+  monitor_start: "09:00"
+  monitor_end: "15:35"
+  premarket_brief_at: "08:45"
+  eod_summary_at: "15:35"
+
+broker:
+  name: dhan
+  data_only: true
+
+order_placement:
+  enabled: false               # never enable without explicit owner approval
+
+telegram:
+  max_messages_per_minute: 20
+  request_timeout_seconds: 10
+
+news:
+  llm_scorer_enabled: false    # free sources + local FinBERT only
+
+storage:
+  sqlite_path: data/nifbot.sqlite3
+  parquet_dir: data/parquet
+
+logging:
+  dir: logs
+  level: INFO
+  max_bytes: 5000000
+  backup_count: 10

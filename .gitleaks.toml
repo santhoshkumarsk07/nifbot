@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Obviously fake tokens used in unit tests"
+regexes = ['''AAFakeTokenForTestsOnly''']

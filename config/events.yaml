@@ -1,0 +1,5 @@
+# Scheduled market-moving events. impact: high => no new calls; medium => half size.
+# Fill from official calendars (RBI, Fed, MOSPI, Union Budget, heavyweight results).
+events: []
+# example:
+#  - {date: 2026-12-04, time: "10:00", name: RBI MPC policy, impact: high}
