@@ -1,4 +1,4 @@
-.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send features features-history prepare-data backtest train report paper live
+.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send features features-history prepare-data selftest data-check flows-backfill backtest train report paper live
 
 setup:            ## install pinned deps + git hooks
 	uv sync
@@ -65,10 +65,20 @@ features:         ## features for a recorded day: make features DATE=2026-10-05
 features-history: ## training feature table from downloaded Dhan history
 	uv run nifbot features-history
 
-prepare-data:     ## ONE command: download history + options, flows, build training features
+prepare-data:     ## ONE command: history + expired options + FII positioning history + features
 	uv run nifbot fetch-history --options
-	-uv run nifbot flows-fetch
+	-uv run nifbot flows-backfill
 	uv run nifbot features-history
+	-uv run nifbot data-check
+
+selftest:         ## try every live connection once (Telegram, Dhan, NSE, FRED, news)
+	uv run nifbot selftest
+
+data-check:       ## what is present / missing for backtesting and training
+	uv run nifbot data-check
+
+flows-backfill:   ## NSE participant OI for the last 3 years (skips days already stored)
+	uv run nifbot flows-backfill
 
 backtest train report paper live:
 	@echo "'$@' is not implemented yet (see milestone plan in README)"; exit 1

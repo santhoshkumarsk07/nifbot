@@ -20,7 +20,7 @@ from nifbot.news.sentiment import make_scorer
 from nifbot.news.sources import NewsConfig
 from nifbot.news.store import NewsStore, connect
 from nifbot.notify.messages import BriefInputs
-from nifbot.trading_calendar import TradingCalendar
+from nifbot.trading_calendar import CalendarError, TradingCalendar
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +66,41 @@ def fetch_flows(
         except (FetchError, fii_dii.FiiDiiError) as exc:
             out.append(f"FII/DII: FAILED ({exc})")
     return out
+
+
+def backfill_participant_oi(
+    conn: sqlite3.Connection,
+    fetcher: Fetcher,
+    cal: TradingCalendar,
+    start: date,
+    end: date,
+) -> tuple[int, int, list[str]]:
+    """Fetch NSE participant OI for every trading day in [start, end] not yet stored.
+
+    Returns (fetched, skipped_existing, failures). Days whose year has no holiday
+    list are skipped rather than guessed.
+    """
+    store = FlowStore(conn)
+    have = store.participant_days()
+    fetched = skipped = 0
+    failures: list[str] = []
+    d = start
+    while d <= end:
+        try:
+            trading = cal.is_trading_day(d)
+        except CalendarError:
+            trading = False
+        if trading:
+            if d in have:
+                skipped += 1
+            else:
+                try:
+                    store.add_participant(participant_oi.fetch(fetcher, d))
+                    fetched += 1
+                except (FetchError, participant_oi.ParticipantOIError) as exc:
+                    failures.append(f"{d}: {exc}")
+        d += timedelta(days=1)
+    return fetched, skipped, failures
 
 
 def latest_recorded_vix(data_dir: Path, before: datetime) -> Quote | None:

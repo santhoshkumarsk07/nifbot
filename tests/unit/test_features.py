@@ -208,6 +208,7 @@ def test_inputs_from_history() -> None:
     ch = chain_from_rolling([roll, pd.DataFrame()])
     assert len(ch) == 3 and ch["underlying"].iloc[0] == 25010
     assert chain_from_rolling([]).empty
+    assert chain_from_rolling([roll.drop(columns=["strike"])]).empty  # malformed -> skipped
 
 
 def test_chain_oi_change_from_day_start_when_no_prev_oi() -> None:

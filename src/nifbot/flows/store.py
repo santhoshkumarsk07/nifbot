@@ -57,6 +57,13 @@ class FlowStore:
             )
         self._c.commit()
 
+    def participant_days(self) -> set[date]:
+        rows = self._c.execute("SELECT DISTINCT day FROM participant_oi")
+        return {date.fromisoformat(r[0]) for r in rows}
+
+    def cash_days(self) -> set[date]:
+        return {date.fromisoformat(r[0]) for r in self._c.execute("SELECT day FROM cash_flows")}
+
     def participant_history(self, who: str, before: date, limit: int = 2) -> list[ParticipantOI]:
         """Latest ``limit`` days strictly before ``before``, oldest first."""
         rows = self._c.execute(

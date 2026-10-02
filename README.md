@@ -30,12 +30,31 @@ Every command works as `make <name>` or, on Windows without make, `uv run nifbot
 |---|---|---|
 | Once | `make setup` | installs everything |
 | Each trading day, before 09:00 | put a fresh Dhan token in `.env` | Dhan tokens last ~1 day |
-| Once (takes 15-30 min) | `make prepare-data` | downloads ~3 years of Dhan history incl. expired options, then builds the training feature table `data/features/history.parquet` |
+| Once | `make selftest` | tries Telegram, Dhan live + history, NSE, FRED and news once; PASS/FAIL each |
+| Once (takes 30-60 min) | `make prepare-data` | downloads ~3 years of Dhan history incl. expired options, then builds the training feature table `data/features/history.parquet` |
 | 08:45 | `make brief-send` | pre-market brief to Telegram |
 | 09:00-15:35 | `make record` and `make news-watch` (two windows) | records the session, sends news alerts |
 | After close | `make flows-fetch` | FII/DII/Pro/Client positions for the day |
 
 If a command prints `FAIL` or an error, copy the whole output into the chat.
+
+## What training needs (`make data-check` shows the current state)
+
+| Needed | Source | Status check |
+|---|---|---|
+| 2+ years of Nifty 1-min history | Dhan `/charts/intraday` | `Nifty 1-min history` |
+| India VIX 1-min history | Dhan | `India VIX 1-min history` |
+| Expired weekly options, ATM-10..ATM+10, 1-min (price, OI, IV) | Dhan `/charts/rollingoption` | `Expired options history` |
+| FII/DII/Pro/Client index positions per day | NSE archive files | `FII participant OI history` |
+| NSE holiday lists for every year in the history | config/holidays.yaml | `NSE holiday lists` |
+| Expiry weekday rules by date | config/contracts.yaml | `Expiry weekday rules` |
+| Lot sizes and charges by date | config/charges.yaml (milestone 5) | `Lot sizes and charges` |
+| Training feature table | `nifbot features-history` | `Training feature table` |
+
+Known limits (shown as INFO, not errors): Dhan's free history has no 1-minute data for
+expired futures, so futures features are live-only; free news sources have no back-history,
+so the news score only exists from the day you start `news-watch`; FII/DII cash history needs
+manual entry or the NSE connector.
 
 ## Setup
 

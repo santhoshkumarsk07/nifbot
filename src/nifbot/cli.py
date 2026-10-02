@@ -11,7 +11,7 @@ from typing import Literal
 
 import pandas as pd
 
-from nifbot import DISCLAIMER, services
+from nifbot import DISCLAIMER, readiness, selftest, services
 from nifbot.config import PROJECT_ROOT, Secrets, Settings, insecure_permissions, load_settings
 from nifbot.data.adapter import DataError
 from nifbot.data.factory import dhan_adapter, dhan_client
@@ -486,6 +486,72 @@ def cmd_features_history(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_flows_backfill(args: argparse.Namespace) -> int:
+    """Fetch NSE participant OI for every trading day in a range (skips stored days)."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    cal = TradingCalendar.load()
+    end = date.fromisoformat(args.end) if args.end else now_ist().date() - timedelta(days=1)
+    start = date.fromisoformat(args.start) if args.start else end - timedelta(days=365 * args.years)
+    print(f"participant OI {start} -> {end} (about 1 request per trading day; be patient)")
+    fetched, skipped, failures = services.backfill_participant_oi(
+        services.open_db(settings), Fetcher(), cal, start, end
+    )
+    print(f"fetched {fetched}, already stored {skipped}, failed {len(failures)}")
+    for line in failures[:10]:
+        print(f"  {line}")
+    if len(failures) > 10:
+        print(f"  ... {len(failures) - 10} more")
+    return 0 if fetched + skipped > 0 else 1
+
+
+def cmd_data_check(_args: argparse.Namespace) -> int:
+    """Report what is present / missing for backtesting and training."""
+    settings, secrets = load_settings(), _secrets()
+    cal = TradingCalendar.load()
+    today = now_ist().date()
+    data_root = PROJECT_ROOT / "data"
+    hist_checks, days = readiness.check_history(data_root / "history" / "dhan", cal, today)
+    checks = [
+        *readiness.check_environment(secrets, data_root, PROJECT_ROOT / settings.recorder.data_dir),
+        *readiness.check_config(cal, min(days) if days else None, today),
+        *hist_checks,
+        readiness.check_features(data_root / "features" / "history.parquet"),
+        *readiness.check_flows(services.open_db(settings), days),
+    ]
+    for c in checks:
+        print(f"[{c.status:<7}] {c.name}: {c.detail}")
+        if c.fix and c.status != "OK":
+            print(f"           fix: {c.fix}")
+    ready = readiness.training_ready(checks)
+    print("")
+    print("READY for backtesting/training" if ready else "NOT READY: fix the MISSING items above")
+    return 0 if ready else 1
+
+
+def cmd_selftest(args: argparse.Namespace) -> int:
+    """Try every live connection once; paste the output into the chat."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    results = selftest.run_selftest(
+        settings,
+        secrets,
+        load_news_config(),
+        TradingCalendar.load(),
+        PROJECT_ROOT / "data" / "selftest",
+        Fetcher(),
+        telegram=not args.no_telegram,
+    )
+    for r in results:
+        print(f"[{'PASS' if r.ok else 'FAIL'}] {r.name}: {r.detail}")
+    failed = [r.name for r in results if not r.ok]
+    print("")
+    print(
+        "ALL PASSED" if not failed else f"FAILED: {', '.join(failed)} (paste this output in chat)"
+    )
+    return 0 if not failed else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nifbot", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -526,6 +592,17 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("fii", type=float, help="FII net, Rs crore (negative = selling)")
     fa.add_argument("dii", type=float, help="DII net, Rs crore")
     fa.set_defaults(func=cmd_flows_add)
+    fb = sub.add_parser("flows-backfill", help="participant OI history for a date range")
+    fb.add_argument("--start", help="YYYY-MM-DD")
+    fb.add_argument("--end", help="YYYY-MM-DD (default: yesterday)")
+    fb.add_argument("--years", type=int, default=3)
+    fb.set_defaults(func=cmd_flows_backfill)
+    st = sub.add_parser("selftest", help="try every live connection once")
+    st.add_argument("--no-telegram", action="store_true", help="skip the Telegram message")
+    st.set_defaults(func=cmd_selftest)
+    sub.add_parser("data-check", help="what is present/missing for training").set_defaults(
+        func=cmd_data_check
+    )
     fe = sub.add_parser("features", help="features for one recorded day")
     fe.add_argument("date", help="YYYY-MM-DD")
     fe.set_defaults(func=cmd_features)

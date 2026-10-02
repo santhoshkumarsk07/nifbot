@@ -9,6 +9,7 @@ Daily: index = trading date; only facts known BEFORE that day's open.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable, Sequence
 from datetime import date
 from typing import Any
@@ -20,6 +21,8 @@ from nifbot.data.models import Snapshot
 from nifbot.features.expiry import ExpiryRules
 from nifbot.flows.store import FlowStore
 from nifbot.trading_calendar import CalendarError, TradingCalendar
+
+log = logging.getLogger(__name__)
 
 CHAIN_COLUMNS = [
     "available_at",
@@ -107,6 +110,10 @@ def chain_from_rolling(frames: Iterable[pd.DataFrame]) -> pd.DataFrame:
     parts = []
     for fr in frames:
         if fr.empty:
+            continue
+        missing = {"available_at", "strike", "option_type", "close"} - set(fr.columns)
+        if missing:
+            log.warning("skipping option frame without columns %s", sorted(missing))
             continue
         parts.append(
             pd.DataFrame(
