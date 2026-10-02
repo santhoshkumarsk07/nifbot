@@ -13,6 +13,10 @@ risk:
   flatten_alert_at: "15:10"
   stale_data_seconds: 120        # kill switch threshold
 
+recorder:
+  interval_seconds: 60
+  data_dir: data/recorded
+
 session:
   monitor_start: "09:00"
   monitor_end: "15:35"
@@ -22,6 +26,17 @@ session:
 broker:
   name: dhan
   data_only: true
+  dhan:
+    base_url: https://api.dhan.co/v2
+    nifty_security_id: "13"        # NIFTY 50 in IDX_I (per Dhan SDK examples)
+    vix_security_id: "21"          # India VIX in IDX_I: VERIFY against Dhan scrip master
+    futures_security_id: null      # null = resolve current month from scrip master
+    scrip_master_url: https://images.dhan.co/api-data/api-scrip-master.csv
+    timeout_seconds: 10
+    max_retries: 3
+    quote_min_interval_seconds: 1.0    # Dhan market-quote limit: 1 request/second
+    chain_min_interval_seconds: 3.0    # Dhan option-chain limit: 1 request/3 seconds
+    history_min_interval_seconds: 0.5
 
 order_placement:
   enabled: false               # never enable without explicit owner approval

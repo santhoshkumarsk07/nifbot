@@ -59,9 +59,37 @@ class SessionSettings(_Strict):
         return _check_hhmm(value)
 
 
+class DhanSettings(_Strict):
+    """Dhan HQ v2 market-data settings (no order endpoints are used)."""
+
+    base_url: str
+    nifty_security_id: str
+    vix_security_id: str
+    futures_security_id: str | None = None
+    scrip_master_url: str
+    timeout_seconds: float = Field(gt=0, le=60)
+    max_retries: int = Field(ge=0, le=6)
+    quote_min_interval_seconds: float = Field(ge=0)
+    chain_min_interval_seconds: float = Field(ge=0)
+    history_min_interval_seconds: float = Field(ge=0)
+
+    @field_validator("base_url", "scrip_master_url")
+    @classmethod
+    def _https(cls, value: str) -> str:
+        if not value.startswith("https://"):
+            raise ValueError("only https:// URLs are allowed")
+        return value
+
+
 class BrokerSettings(_Strict):
     name: str
     data_only: bool = True
+    dhan: DhanSettings
+
+
+class RecorderSettings(_Strict):
+    interval_seconds: int = Field(ge=10)
+    data_dir: str
 
 
 class OrderPlacementSettings(_Strict):
@@ -96,6 +124,7 @@ class Settings(_Strict):
     risk: RiskSettings
     session: SessionSettings
     broker: BrokerSettings
+    recorder: RecorderSettings
     order_placement: OrderPlacementSettings
     telegram: TelegramSettings
     news: NewsSettings
