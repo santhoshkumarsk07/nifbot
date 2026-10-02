@@ -103,6 +103,20 @@ class TelegramSettings(_Strict):
 
 class NewsSettings(_Strict):
     llm_scorer_enabled: bool = False
+    watch_start: str = "08:00"
+    watch_end: str = "15:35"
+    alert_impacts: tuple[str, ...] = ("high",)
+    brief_news_hours: int = Field(default=16, ge=1, le=72)
+
+    @field_validator("watch_start", "watch_end")
+    @classmethod
+    def _hhmm(cls, value: str) -> str:
+        return _check_hhmm(value)
+
+
+class FlowsSettings(_Strict):
+    participant_oi_enabled: bool = True
+    fii_dii_enabled: bool = False
 
 
 class StorageSettings(_Strict):
@@ -128,6 +142,7 @@ class Settings(_Strict):
     order_placement: OrderPlacementSettings
     telegram: TelegramSettings
     news: NewsSettings
+    flows: FlowsSettings
     storage: StorageSettings
     logging: LoggingSettings
 

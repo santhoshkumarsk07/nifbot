@@ -1,0 +1,38 @@
+# Free news sources. Set enabled: false to switch one off. All must be https.
+# URLs are the publishers' public RSS feeds; `make news-health` shows which work.
+sentiment_engine: finbert     # finbert (needs: uv sync --extra nlp) or lexicon; falls back to lexicon
+half_life_minutes: 120
+
+sources:
+  # ---- official ----
+  - {id: rbi_press, name: RBI press releases, url: "https://www.rbi.org.in/pressreleases_rss.xml", official: true, poll_minutes: 10, always_relevant: true}
+  - {id: sebi, name: SEBI, url: "https://www.sebi.gov.in/sebirss.xml", official: true, poll_minutes: 15, always_relevant: true}
+  - {id: nse_announcements, name: NSE corporate announcements, url: "https://nsearchives.nseindia.com/content/RSS/Online_announcements.xml", official: true, poll_minutes: 5}
+  - {id: pib_finance, name: PIB (Finance Ministry), url: "https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3", official: true, poll_minutes: 15}
+  - {id: fed_press, name: US Federal Reserve, url: "https://www.federalreserve.gov/feeds/press_all.xml", official: true, poll_minutes: 15, always_relevant: true}
+  - {id: bls, name: US BLS releases, url: "https://www.bls.gov/feed/bls_latest.rss", official: true, poll_minutes: 30}
+  # ---- market news ----
+  - {id: et_markets, name: Economic Times Markets, url: "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms", poll_minutes: 3}
+  - {id: moneycontrol_markets, name: Moneycontrol Markets, url: "https://www.moneycontrol.com/rss/marketreports.xml", poll_minutes: 3}
+  - {id: moneycontrol_economy, name: Moneycontrol Economy, url: "https://www.moneycontrol.com/rss/economy.xml", poll_minutes: 10}
+  - {id: livemint_markets, name: Livemint Markets, url: "https://www.livemint.com/rss/markets", poll_minutes: 3}
+  - {id: bs_markets, name: Business Standard Markets, url: "https://www.business-standard.com/rss/markets-106.rss", poll_minutes: 5}
+  - {id: hbl_markets, name: Hindu BusinessLine Markets, url: "https://www.thehindubusinessline.com/markets/feeder/default.rss", poll_minutes: 5}
+  - {id: cnbctv18_markets, name: CNBC-TV18 Markets, url: "https://www.cnbctv18.com/commonfeeds/v1/cne/rss/market.xml", poll_minutes: 3}
+  # Reuters has no public RSS; Google News search feed covers Reuters/others' headlines.
+  - {id: gnews_india_markets, name: Google News (Nifty/Sensex), url: "https://news.google.com/rss/search?q=Nifty+OR+Sensex+OR+RBI+when:1d&hl=en-IN&gl=IN&ceid=IN:en", poll_minutes: 5}
+  - {id: gnews_global, name: Google News (global markets), url: "https://news.google.com/rss/search?q=Fed+OR+%22Wall+Street%22+OR+crude+oil+when:1d&hl=en-IN&gl=IN&ceid=IN:en", poll_minutes: 10}
+
+# Topic -> keywords (case-insensitive, whole words). A headline is relevant if any matches.
+topics:
+  index: [Nifty, "Nifty 50", Sensex, "Bank Nifty", "stock market", Dalal Street, "market crash", "India VIX"]
+  heavyweights: [HDFC Bank, Reliance Industries, Reliance, ICICI Bank, Infosys, Bharti Airtel, TCS, "Tata Consultancy", "Larsen & Toubro", "L&T", ITC, Axis Bank, Kotak Mahindra, SBI, "State Bank of India", "Mahindra & Mahindra", Bajaj Finance, Hindustan Unilever, HCLTech, Sun Pharma]
+  rbi_policy: [RBI, "repo rate", "monetary policy", MPC, "Reserve Bank", "CRR", "liquidity"]
+  sebi: [SEBI, "F&O", derivatives, "expiry", "lot size", "margin rules"]
+  budget: [budget, "fiscal deficit", "Finance Minister", Sitharaman, GST, "capital gains tax", STT]
+  fed: [Fed, "Federal Reserve", Powell, FOMC, "rate cut", "rate hike", "US inflation", "nonfarm payrolls", "US CPI"]
+  crude: [crude, Brent, OPEC, "oil prices"]
+  geopolitics: [war, tariff, tariffs, sanctions, missile, ceasefire, "trade deal", Pakistan, China, Ukraine, Israel, Iran]
+  macro: [CPI, inflation, IIP, GDP, PMI, "trade deficit", rupee, "current account", MOSPI]
+  fii: [FII, FPI, FIIs, FPIs, DII, DIIs, "foreign investors", "foreign portfolio"]
+  global: ["Wall Street", "Dow Jones", Nasdaq, "S&P 500", Nikkei, "Hang Seng", "GIFT Nifty", "US yields", "dollar index"]

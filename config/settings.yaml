@@ -47,6 +47,14 @@ telegram:
 
 news:
   llm_scorer_enabled: false    # free sources + local FinBERT only
+  watch_start: "08:00"
+  watch_end: "15:35"
+  alert_impacts: [high]        # which impact levels are pushed to Telegram immediately
+  brief_news_hours: 16         # news window for the 08:45 brief
+
+flows:
+  participant_oi_enabled: true # NSE official daily archive file
+  fii_dii_enabled: false       # NSE website API; NSE terms restrict automated access. Use `nifbot flows-add` instead, or enable at your own discretion.
 
 storage:
   sqlite_path: data/nifbot.sqlite3

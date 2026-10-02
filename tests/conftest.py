@@ -34,6 +34,18 @@ class FakeTelegram:
         return httpx.Response(200, json={"ok": True, "result": {"message_id": len(self.calls)}})
 
 
+@pytest.fixture(autouse=True)
+def _isolate_project_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    """Keep logs/DB written by CLI code out of the real project directory."""
+    from nifbot import cli, services
+
+    root = tmp_path_factory.mktemp("project")
+    monkeypatch.setattr(cli, "PROJECT_ROOT", root)
+    monkeypatch.setattr(services, "PROJECT_ROOT", root)
+
+
 @pytest.fixture
 def fake_tg() -> FakeTelegram:
     return FakeTelegram()

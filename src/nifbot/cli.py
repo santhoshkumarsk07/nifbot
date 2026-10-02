@@ -9,16 +9,23 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
-from nifbot import DISCLAIMER
-from nifbot.config import PROJECT_ROOT, Secrets, insecure_permissions, load_settings
+from nifbot import DISCLAIMER, services
+from nifbot.config import PROJECT_ROOT, Secrets, Settings, insecure_permissions, load_settings
 from nifbot.data.adapter import DataError
 from nifbot.data.factory import dhan_adapter, dhan_client
 from nifbot.data.history import DhanHistory, RollingSpec, relative_strikes
 from nifbot.data.models import Snapshot
 from nifbot.data.recorder import RawWriter, Recorder, compact, day_dir
+from nifbot.flows.fii_dii import CashFlow
+from nifbot.flows.store import FlowStore
 from nifbot.logging_setup import setup_logging
+from nifbot.net import Fetcher
+from nifbot.news.models import ScoredNews
+from nifbot.news.sources import load_news_config
+from nifbot.news.store import NewsStore
+from nifbot.notify.messages import news_alert, premarket_brief
 from nifbot.notify.telegram import TelegramBot, TelegramError, discover_chat_ids
-from nifbot.timeutil import now_ist
+from nifbot.timeutil import now_ist, parse_hhmm
 from nifbot.trading_calendar import CalendarError, TradingCalendar
 
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -240,6 +247,146 @@ def cmd_fetch_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def _bot(settings: Settings, secrets: Secrets) -> TelegramBot:
+    token = secrets.telegram_bot_token.get_secret_value() if secrets.telegram_bot_token else ""
+    return TelegramBot(
+        token,
+        secrets.telegram_allowed_chat_ids,
+        timeout=settings.telegram.request_timeout_seconds,
+        max_per_minute=settings.telegram.max_messages_per_minute,
+    )
+
+
+def _send_alerts(
+    settings: Settings, bot: TelegramBot | None, conn: object, items: list[ScoredNews]
+) -> int:
+    sent = 0
+    store = NewsStore(conn)  # type: ignore[arg-type]
+    for s in items:
+        if s.impact in settings.news.alert_impacts and bot is not None:
+            bot.broadcast(news_alert(s))
+            store.mark_alerted(s.item.url)
+            sent += 1
+    return sent
+
+
+def cmd_news_once(args: argparse.Namespace) -> int:
+    """Poll every enabled news source once and print new relevant items."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    conn = services.open_db(settings)
+    fetcher = Fetcher()
+    result = services.news_pipeline(load_news_config(), conn, fetcher).run_once(force=True)
+    for s in result.new:
+        print(f"[{s.sign}] {s.impact:<6} {s.item.source_id:<22} {s.item.title[:90]}")
+    for src, err in result.errors.items():
+        print(f"source {src}: FAILED {err}")
+    print(f"fetched {result.fetched}, new relevant {len(result.new)}, failed {len(result.errors)}")
+    if args.alerts:
+        try:
+            print(
+                f"alerts sent: {_send_alerts(settings, _bot(settings, secrets), conn, result.new)}"
+            )
+        except TelegramError as exc:
+            print(f"telegram FAILED: {exc}")
+            return 1
+    return 0
+
+
+def cmd_news_watch(_args: argparse.Namespace) -> int:
+    """Poll news during the watch window and push high-impact alerts to Telegram."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    try:
+        bot = _bot(settings, secrets)
+    except TelegramError as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    conn = services.open_db(settings)
+    pipe = services.news_pipeline(load_news_config(), conn, Fetcher())
+    stop = threading.Event()
+    end = parse_hhmm(settings.news.watch_end)
+    try:
+        while not stop.is_set() and now_ist().time() <= end:
+            result = pipe.run_once()
+            n = _send_alerts(settings, bot, conn, result.new)
+            if result.new:
+                print(f"{now_ist():%H:%M} new {len(result.new)}, alerts {n}", flush=True)
+            stop.wait(60)
+    except KeyboardInterrupt:
+        pass
+    bot.close()
+    return 0
+
+
+def cmd_news_health(_args: argparse.Namespace) -> int:
+    """Show per-source fetch health."""
+    conn = services.open_db(load_settings())
+    rows = NewsStore(conn).health()
+    if not rows:
+        print("no data yet: run `make news-once`")
+    for r in rows:
+        state = "OK " if r["consecutive_failures"] == 0 else f"ERR x{r['consecutive_failures']}"
+        last_ok = r["last_ok"] or "-"
+        print(f"{state:<7} {r['source_id']:<22} last ok {last_ok}  {r['last_error'] or ''}")
+    return 0
+
+
+def cmd_flows_fetch(args: argparse.Namespace) -> int:
+    """Fetch participant OI (and FII/DII if enabled) for a day."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    cal = TradingCalendar.load()
+    day = (
+        date.fromisoformat(args.date)
+        if args.date
+        else services.previous_trading_day(cal, now_ist().date())
+    )
+    lines = services.fetch_flows(settings, services.open_db(settings), Fetcher(), day)
+    for line in lines:
+        print(line)
+    return 1 if any("FAILED" in line for line in lines) else 0
+
+
+def cmd_flows_add(args: argparse.Namespace) -> int:
+    """Manually enter FII/DII net cash flows (₹ crore) for a day."""
+    settings = load_settings()
+    flow = CashFlow(date.fromisoformat(args.date), args.fii, args.dii)
+    FlowStore(services.open_db(settings)).add_cash(flow, "manual")
+    print(f"saved {flow.day}: FII {flow.fii_net_cr:+,.0f} cr, DII {flow.dii_net_cr:+,.0f} cr")
+    return 0
+
+
+def cmd_brief(args: argparse.Namespace) -> int:
+    """Build the pre-market brief; print it, and send it with --send."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    cal = TradingCalendar.load()
+    now = now_ist()
+    try:
+        trading = cal.is_trading_day(now.date())
+    except CalendarError as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    if not trading and not args.force:
+        print(f"{now.date()} is not a trading day; use --force to build anyway")
+        return 0
+    inputs = services.brief_inputs(
+        settings, load_news_config(), services.open_db(settings), Fetcher(), cal, now
+    )
+    text = premarket_brief(inputs)
+    print(text)
+    if args.send:
+        try:
+            bot = _bot(settings, secrets)
+            bot.broadcast(text)
+            bot.close()
+        except TelegramError as exc:
+            print(f"telegram FAILED: {exc}")
+            return 1
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nifbot", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -265,6 +412,25 @@ def build_parser() -> argparse.ArgumentParser:
     fh.add_argument("--options", action="store_true", help="also expired weekly options")
     fh.add_argument("--width", type=int, default=10, help="strikes each side of ATM")
     fh.set_defaults(func=cmd_fetch_history)
+    no = sub.add_parser("news-once", help="poll all news sources once")
+    no.add_argument("--alerts", action="store_true", help="send high-impact alerts")
+    no.set_defaults(func=cmd_news_once)
+    sub.add_parser("news-watch", help="poll news all session, alert").set_defaults(
+        func=cmd_news_watch
+    )
+    sub.add_parser("news-health", help="per-source health").set_defaults(func=cmd_news_health)
+    ff = sub.add_parser("flows-fetch", help="participant OI (+FII/DII if enabled)")
+    ff.add_argument("date", nargs="?", help="YYYY-MM-DD (default: previous trading day)")
+    ff.set_defaults(func=cmd_flows_fetch)
+    fa = sub.add_parser("flows-add", help="enter FII/DII net cash flows manually")
+    fa.add_argument("date", help="YYYY-MM-DD")
+    fa.add_argument("fii", type=float, help="FII net, Rs crore (negative = selling)")
+    fa.add_argument("dii", type=float, help="DII net, Rs crore")
+    fa.set_defaults(func=cmd_flows_add)
+    br = sub.add_parser("brief", help="pre-market brief")
+    br.add_argument("--send", action="store_true", help="send to Telegram")
+    br.add_argument("--force", action="store_true", help="build on non-trading days too")
+    br.set_defaults(func=cmd_brief)
     return parser
 
 

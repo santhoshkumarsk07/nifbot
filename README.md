@@ -13,8 +13,8 @@ pre-market brief, news alerts and trade calls to **your** Telegram, and tracks t
 |---|---|---|
 | 1 | Skeleton, config, secrets, holiday calendar, Telegram with allow-list | done (test message pending on your machine) |
 | 2 | Dhan adapter, recorder, replay adapter, Dhan history download | done (live recording pending) |
-| 3 | News (free RSS + official sources) and flows connectors, pre-market brief | next |
-| 4 | Shared feature module + look-ahead tests | |
+| 3 | News (free RSS + official sources) and flows connectors, pre-market brief | done (live fetch pending on your machine) |
+| 4 | Shared feature module + look-ahead tests | next |
 | 5 | Backtest engine, Indian charges, first 3 strategies, HTML report | |
 | 6 | Remaining strategies, regime classifier, go-live gate | |
 | 7 | Model training, walk-forward validation, registry | |
@@ -76,6 +76,35 @@ Files go to `data/history/dhan/` (Parquet, plus gzipped raw responses). Every ca
 make check                    # config valid, secrets present (values never printed)
 make calendar DATE=2026-10-20 # is it an NSE trading day?
 ```
+
+## News, flows and the pre-market brief
+
+```bash
+make news-once     # fetch every source once; prints new relevant headlines with +/-/0 and impact
+make news-health   # which sources work on your network
+make flows-fetch   # NSE participant-wise OI (FII/DII/Pro/Client) for the previous trading day
+make brief         # print the brief;  make brief-send  sends it to Telegram
+make news-watch    # run all session: high-impact news alerts to Telegram as they arrive
+```
+
+- **Sources** (`config/news.yaml`): RBI, SEBI, NSE announcements, PIB, US Fed, US BLS, Economic
+  Times, Moneycontrol, Livemint, Business Standard, Hindu BusinessLine, CNBC-TV18 and Google
+  News searches (which also carry Reuters headlines). All free RSS feeds. robots.txt is
+  respected, each host is rate-limited, and any source can be switched off with `enabled: false`.
+- **Pipeline:** dedupe (URL + fuzzy title), keyword relevance (Nifty, heavyweights, RBI, SEBI,
+  budget, Fed, crude, war/tariffs, macro, FII), sentiment, impact (high/medium/low), stored in
+  SQLite, and a time-decayed news score that only counts news *after* it was fetched.
+- **Sentiment:** FinBERT runs locally if you install it (`uv sync --extra nlp`, a large
+  PyTorch download). Without it, a small finance word-list scorer is used (less accurate).
+- **Global cues:** FRED (US Federal Reserve data, official and free): S&P 500, Dow, Nasdaq,
+  Nikkei, Brent, US 10Y, dollar index, USD/INR. Values are previous closes and show their date.
+- **GIFT Nifty:** no free official feed, so the brief shows "not available".
+- **FII/DII cash flows:** NSE publishes these only on its website, whose terms restrict
+  automated access, so the connector is off (`flows.fii_dii_enabled: false`). Enter the daily
+  figures with `uv run nifbot flows-add 2026-10-01 -- -2500 3000` (FII, DII in Rs crore), or
+  turn the connector on at your own discretion.
+- **Pre-market tilt:** a transparent rules-based summary of the overnight inputs. It is
+  not a backtested forecast, and the brief says so.
 
 ## Configuration
 

@@ -40,7 +40,12 @@ class RawWriter:
     def __call__(self, endpoint: str, request: dict[str, Any], body: Any, at: datetime) -> None:
         path = day_dir(self._dir, at.astimezone(IST).date())
         path.mkdir(parents=True, exist_ok=True)
-        line = {"received_at": at.isoformat(), "endpoint": endpoint, "request": request, "body": body}
+        line = {
+            "received_at": at.isoformat(),
+            "endpoint": endpoint,
+            "request": request,
+            "body": body,
+        }
         with (path / "raw.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(line, separators=(",", ":"), default=str) + "\n")
 

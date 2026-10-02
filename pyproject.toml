@@ -5,6 +5,7 @@ description = "Semi-automatic Nifty 50 options assistant: signals and Telegram a
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "defusedxml>=0.7.1",
     "httpx>=0.27",
     "pandas>=2.2",
     "pyarrow>=17",
@@ -12,6 +13,13 @@ dependencies = [
     "pydantic-settings>=2.3",
     "pyyaml>=6.0.1",
     "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+# Local FinBERT sentiment. Large download (PyTorch); without it a lexicon scorer is used.
+nlp = [
+    "torch>=2.3",
+    "transformers>=4.44",
 ]
 
 [dependency-groups]
@@ -24,6 +32,7 @@ dev = [
     "pytest>=8.2",
     "pytest-cov>=5.0",
     "ruff>=0.5",
+    "types-defusedxml>=0.7.0.20260504",
     "types-PyYAML>=6.0",
 ]
 
@@ -46,6 +55,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
+"tests/fakes_web.py" = ["E501"]  # fixture mirrors NSE's long CSV header verbatim
 
 [tool.mypy]
 python_version = "3.11"

@@ -1,4 +1,4 @@
-.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history backtest train report paper live
+.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send backtest train report paper live
 
 setup:            ## install pinned deps + git hooks
 	uv sync
@@ -40,6 +40,24 @@ compact:          ## make compact DATE=2026-10-05
 
 fetch-history:    ## Dhan history: spot+VIX (add ARGS="--options" for expired weekly options)
 	uv run nifbot fetch-history $(ARGS)
+
+news-once:        ## poll all news sources once and print new relevant items
+	uv run nifbot news-once
+
+news-watch:       ## poll news 08:00-15:35 IST and push high-impact alerts to Telegram
+	uv run nifbot news-watch
+
+news-health:      ## per-source fetch status
+	uv run nifbot news-health
+
+flows-fetch:      ## NSE participant OI for the previous trading day (DATE=YYYY-MM-DD optional)
+	uv run nifbot flows-fetch $(DATE)
+
+brief:            ## print the pre-market brief
+	uv run nifbot brief --force
+
+brief-send:       ## build and send the pre-market brief to Telegram
+	uv run nifbot brief --send
 
 backtest train report paper live:
 	@echo "'$@' is not implemented yet (see milestone plan in README)"; exit 1
