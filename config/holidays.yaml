@@ -2,6 +2,67 @@
 # A year that is missing here makes the calendar check FAIL (kill switch), by design.
 # verified: set to true only after checking against the official NSE circular.
 years:
+  2023:
+    verified: false
+    source: "Secondary sources (brokers/data vendors) pending check against the NSE circular"
+    holidays:
+      - {date: 2023-01-26, name: Republic Day}
+      - {date: 2023-03-07, name: Holi}
+      - {date: 2023-03-30, name: Ram Navami}
+      - {date: 2023-04-04, name: Mahavir Jayanti}
+      - {date: 2023-04-07, name: Good Friday}
+      - {date: 2023-04-14, name: Dr. Baba Saheb Ambedkar Jayanti}
+      - {date: 2023-05-01, name: Maharashtra Day}
+      - {date: 2023-06-28, name: Bakri Id}
+      - {date: 2023-08-15, name: Independence Day}
+      - {date: 2023-09-19, name: Ganesh Chaturthi}
+      - {date: 2023-10-02, name: Mahatma Gandhi Jayanti}
+      - {date: 2023-10-24, name: Dussehra}
+      - {date: 2023-11-14, name: Diwali Balipratipada}
+      - {date: 2023-11-27, name: Gurunanak Jayanti}
+      - {date: 2023-12-25, name: Christmas}
+  2024:
+    verified: false
+    source: "Secondary sources (brokers) pending check against the NSE circular"
+    holidays:
+      - {date: 2024-01-22, name: Special holiday}
+      - {date: 2024-01-26, name: Republic Day}
+      - {date: 2024-03-08, name: Mahashivratri}
+      - {date: 2024-03-25, name: Holi}
+      - {date: 2024-03-29, name: Good Friday}
+      - {date: 2024-04-11, name: Id-Ul-Fitr}
+      - {date: 2024-04-17, name: Shri Ram Navami}
+      - {date: 2024-05-01, name: Maharashtra Day}
+      - {date: 2024-05-20, name: General Parliamentary Elections}
+      - {date: 2024-06-17, name: Bakri Id}
+      - {date: 2024-07-17, name: Moharram}
+      - {date: 2024-08-15, name: Independence Day}
+      - {date: 2024-10-02, name: Mahatma Gandhi Jayanti}
+      - {date: 2024-11-01, name: Diwali Laxmi Pujan}
+      - {date: 2024-11-15, name: Gurunanak Jayanti}
+      - {date: 2024-12-25, name: Christmas}
+    special_sessions:
+      - {date: 2024-11-01, name: Muhurat Trading}
+  2025:
+    verified: false
+    source: "Secondary sources (brokers) pending check against the NSE circular"
+    holidays:
+      - {date: 2025-02-26, name: Mahashivratri}
+      - {date: 2025-03-14, name: Holi}
+      - {date: 2025-03-31, name: Id-Ul-Fitr}
+      - {date: 2025-04-10, name: Shri Mahavir Jayanti}
+      - {date: 2025-04-14, name: Dr. Baba Saheb Ambedkar Jayanti}
+      - {date: 2025-04-18, name: Good Friday}
+      - {date: 2025-05-01, name: Maharashtra Day}
+      - {date: 2025-08-15, name: Independence Day}
+      - {date: 2025-08-27, name: Ganesh Chaturthi}
+      - {date: 2025-10-02, name: Mahatma Gandhi Jayanti / Dussehra}
+      - {date: 2025-10-21, name: Diwali Laxmi Pujan}
+      - {date: 2025-10-22, name: Diwali Balipratipada}
+      - {date: 2025-11-05, name: Guru Nanak Jayanti}
+      - {date: 2025-12-25, name: Christmas}
+    special_sessions:
+      - {date: 2025-10-21, name: Muhurat Trading}
   2026:
     verified: false
     source: "Secondary sources (brokers/news) pending check against the NSE holiday circular"

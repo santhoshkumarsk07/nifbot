@@ -14,13 +14,28 @@ pre-market brief, news alerts and trade calls to **your** Telegram, and tracks t
 | 1 | Skeleton, config, secrets, holiday calendar, Telegram with allow-list | done (test message pending on your machine) |
 | 2 | Dhan adapter, recorder, replay adapter, Dhan history download | done (live recording pending) |
 | 3 | News (free RSS + official sources) and flows connectors, pre-market brief | done (live fetch pending on your machine) |
-| 4 | Shared feature module + look-ahead tests | next |
-| 5 | Backtest engine, Indian charges, first 3 strategies, HTML report | |
+| 4 | Shared feature module + look-ahead tests | done |
+| 5 | Backtest engine, Indian charges, first 3 strategies, HTML report | next |
 | 6 | Remaining strategies, regime classifier, go-live gate | |
 | 7 | Model training, walk-forward validation, registry | |
 | 8 | Live engine, risk manager, call tracker, kill switch | |
 | 9 | Paper mode (10 expiry days), live-vs-backtest report | |
 | 10 | Hardening: Docker, scheduling, security scans | |
+
+## What to run (simple version)
+
+Every command works as `make <name>` or, on Windows without make, `uv run nifbot <name>`.
+
+| When | Command | What it does |
+|---|---|---|
+| Once | `make setup` | installs everything |
+| Each trading day, before 09:00 | put a fresh Dhan token in `.env` | Dhan tokens last ~1 day |
+| Once (takes 15-30 min) | `make prepare-data` | downloads ~3 years of Dhan history incl. expired options, then builds the training feature table `data/features/history.parquet` |
+| 08:45 | `make brief-send` | pre-market brief to Telegram |
+| 09:00-15:35 | `make record` and `make news-watch` (two windows) | records the session, sends news alerts |
+| After close | `make flows-fetch` | FII/DII/Pro/Client positions for the day |
+
+If a command prints `FAIL` or an error, copy the whole output into the chat.
 
 ## Setup
 
@@ -105,6 +120,25 @@ make news-watch    # run all session: high-impact news alerts to Telegram as the
   turn the connector on at your own discretion.
 - **Pre-market tilt:** a transparent rules-based summary of the overnight inputs. It is
   not a backtested forecast, and the brief says so.
+
+## Features (milestone 4)
+
+`src/nifbot/features/` is the ONE place features are computed; backtest, training and live
+all call `build_features()`. Columns: time of day; returns and realised volatility; gap; day
+range; 15/30-minute opening range; futures basis, VWAP distance and long/short build-up;
+India VIX; PCR (all strikes and near ATM, OI and volume); max pain; call/put OI walls; change
+in OI near ATM; ATM IV and put-call skew; ATM straddle price; news score; event flags; days
+to expiry; FII futures positioning and cash flows (previous days only).
+
+Look-ahead protection (`tests/unit/test_feature_leakage.py`): features at time t computed
+from all data must equal features computed from only the data available at t; scrambling
+everything after t must not change any earlier feature; a chain snapshot is never used
+before it arrived; the opening range is unknown until its window has closed; flows for a
+day are only used from the next day.
+
+Expiry days come from `config/contracts.yaml` (Thursday weekly expiry until Aug 2025,
+Tuesday from Sep 2025, moved earlier on holidays). Marked `verified: false`; check it.
+Holiday lists for 2023-2025 were added (also unverified) so history can be processed.
 
 ## Configuration
 

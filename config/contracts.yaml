@@ -1,0 +1,6 @@
+# NIFTY weekly option contract rules by effective date. VERIFY against NSE circulars.
+# If the expiry weekday is a holiday, expiry moves to the previous trading day.
+verified: false
+weekly_expiry:
+  - {from: 2019-02-11, weekday: THU}
+  - {from: 2025-09-01, weekday: TUE}   # NSE moved NIFTY weekly expiry to Tuesday

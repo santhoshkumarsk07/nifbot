@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import sys
 import threading
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Literal
+
+import pandas as pd
 
 from nifbot import DISCLAIMER, services
 from nifbot.config import PROJECT_ROOT, Secrets, Settings, insecure_permissions, load_settings
@@ -15,7 +17,23 @@ from nifbot.data.adapter import DataError
 from nifbot.data.factory import dhan_adapter, dhan_client
 from nifbot.data.history import DhanHistory, RollingSpec, relative_strikes
 from nifbot.data.models import Snapshot
-from nifbot.data.recorder import RawWriter, Recorder, compact, day_dir
+from nifbot.data.recorder import (
+    RawWriter,
+    Recorder,
+    compact,
+    day_dir,
+    find_day_file,
+    load_snapshots,
+)
+from nifbot.features import FeatureInputs, build_features
+from nifbot.features.expiry import ExpiryRules
+from nifbot.features.inputs import (
+    bars_from_history,
+    bars_from_snapshots,
+    chain_from_rolling,
+    chain_from_snapshots,
+    daily_context,
+)
 from nifbot.flows.fii_dii import CashFlow
 from nifbot.flows.store import FlowStore
 from nifbot.logging_setup import setup_logging
@@ -25,7 +43,7 @@ from nifbot.news.sources import load_news_config
 from nifbot.news.store import NewsStore
 from nifbot.notify.messages import news_alert, premarket_brief
 from nifbot.notify.telegram import TelegramBot, TelegramError, discover_chat_ids
-from nifbot.timeutil import now_ist, parse_hhmm
+from nifbot.timeutil import IST, now_ist, parse_hhmm
 from nifbot.trading_calendar import CalendarError, TradingCalendar
 
 ENV_FILE = PROJECT_ROOT / ".env"
@@ -387,6 +405,87 @@ def cmd_brief(args: argparse.Namespace) -> int:
     return 0
 
 
+def _feature_summary(feats: pd.DataFrame) -> None:
+    print(f"rows: {len(feats)}  from {feats.index.min()}  to {feats.index.max()}")
+    filled = feats.notna().mean().sort_values()
+    missing = [f"{c} {v:.0%}" for c, v in filled.items() if v < 0.5]
+    if missing:
+        print("mostly empty (input not available): " + ", ".join(missing))
+
+
+def cmd_features(args: argparse.Namespace) -> int:
+    """Build features for one recorded day and print the latest row."""
+    settings = load_settings()
+    data_dir = PROJECT_ROOT / settings.recorder.data_dir
+    day = date.fromisoformat(args.date)
+    try:
+        snaps = load_snapshots(find_day_file(data_dir, day))
+    except FileNotFoundError as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    cal = TradingCalendar.load()
+    conn = services.open_db(settings)
+    inputs = FeatureInputs(
+        bars=bars_from_snapshots(snaps),
+        chain=chain_from_snapshots(snaps),
+        daily=daily_context([day], cal, ExpiryRules.load(cal), FlowStore(conn)),
+        news=NewsStore(conn).between(
+            datetime.combine(day, datetime.min.time(), tzinfo=IST) - timedelta(days=1),
+            datetime.combine(day, datetime.max.time(), tzinfo=IST),
+        ),
+    )
+    feats = build_features(inputs)
+    if feats.empty:
+        print("no session bars in this recording")
+        return 1
+    _feature_summary(feats)
+    last = feats.iloc[-1]
+    print(f"latest ({feats.index[-1]:%H:%M}):")
+    for col, val in last.items():
+        print(f"  {col:<22} {val:.4g}" if pd.notna(val) else f"  {col:<22} n/a")
+    out = day_dir(data_dir, day) / "features.parquet"
+    feats.to_parquet(out)
+    print(f"written: {out}")
+    return 0
+
+
+def cmd_features_history(_args: argparse.Namespace) -> int:
+    """Build the training feature table from Dhan history (make fetch-history first)."""
+    settings = load_settings()
+    hist_dir = PROJECT_ROOT / "data" / "history" / "dhan"
+
+    def load(pattern: str) -> pd.DataFrame:
+        files = sorted(hist_dir.glob(pattern))
+        if not files:
+            return pd.DataFrame()
+        frame = pd.concat([pd.read_parquet(f) for f in files], ignore_index=True)
+        return frame.drop_duplicates()
+
+    spot = load("spot_*.parquet")
+    if spot.empty:
+        print(f'FAIL: no spot history in {hist_dir}. Run: make fetch-history ARGS="--options"')
+        return 1
+    vix = load("vix_*.parquet")
+    option_files = sorted(hist_dir.glob("options_*.parquet"))
+    chain = chain_from_rolling(pd.read_parquet(f) for f in option_files)
+    bars = bars_from_history(spot, vix if not vix.empty else None)
+    cal = TradingCalendar.load()
+    days = sorted(set(pd.DatetimeIndex(bars.index).date))
+    daily = daily_context(days, cal, ExpiryRules.load(cal), FlowStore(services.open_db(settings)))
+    feats = build_features(FeatureInputs(bars=bars, chain=chain, daily=daily))
+    if feats.empty:
+        print("FAIL: no session bars in history")
+        return 1
+    out_dir = PROJECT_ROOT / "data" / "features"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / "history.parquet"
+    feats.to_parquet(out)
+    bars.to_parquet(out_dir / "bars.parquet")
+    _feature_summary(feats)
+    print(f"option files: {len(option_files)}; written: {out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nifbot", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -427,6 +526,12 @@ def build_parser() -> argparse.ArgumentParser:
     fa.add_argument("fii", type=float, help="FII net, Rs crore (negative = selling)")
     fa.add_argument("dii", type=float, help="DII net, Rs crore")
     fa.set_defaults(func=cmd_flows_add)
+    fe = sub.add_parser("features", help="features for one recorded day")
+    fe.add_argument("date", help="YYYY-MM-DD")
+    fe.set_defaults(func=cmd_features)
+    sub.add_parser("features-history", help="training features from Dhan history").set_defaults(
+        func=cmd_features_history
+    )
     br = sub.add_parser("brief", help="pre-market brief")
     br.add_argument("--send", action="store_true", help="send to Telegram")
     br.add_argument("--force", action="store_true", help="build on non-trading days too")

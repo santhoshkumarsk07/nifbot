@@ -63,6 +63,11 @@ strict = true
 files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+# pandas-stubs false positives on .loc / DatetimeIndex attributes in test code
+module = ["tests.unit.test_features", "tests.unit.test_feature_leakage", "tests.unit.test_cli_features"]
+disable_error_code = ["index", "attr-defined", "arg-type"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --cov=nifbot --cov-report=term-missing"

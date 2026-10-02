@@ -1,4 +1,4 @@
-.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send backtest train report paper live
+.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send features features-history prepare-data backtest train report paper live
 
 setup:            ## install pinned deps + git hooks
 	uv sync
@@ -58,6 +58,17 @@ brief:            ## print the pre-market brief
 
 brief-send:       ## build and send the pre-market brief to Telegram
 	uv run nifbot brief --send
+
+features:         ## features for a recorded day: make features DATE=2026-10-05
+	uv run nifbot features $(DATE)
+
+features-history: ## training feature table from downloaded Dhan history
+	uv run nifbot features-history
+
+prepare-data:     ## ONE command: download history + options, flows, build training features
+	uv run nifbot fetch-history --options
+	-uv run nifbot flows-fetch
+	uv run nifbot features-history
 
 backtest train report paper live:
 	@echo "'$@' is not implemented yet (see milestone plan in README)"; exit 1
