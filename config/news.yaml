@@ -25,7 +25,7 @@ sources:
 
 # Topic -> keywords (case-insensitive, whole words). A headline is relevant if any matches.
 topics:
-  index: [Nifty, "Nifty 50", Sensex, "Bank Nifty", "stock market", Dalal Street, "market crash", "India VIX"]
+  index: [Nifty, "Nifty 50", Sensex, D-Street, "Bank Nifty", "stock market", Dalal Street, "market crash", "India VIX"]
   heavyweights: [HDFC Bank, Reliance Industries, Reliance, ICICI Bank, Infosys, Bharti Airtel, TCS, "Tata Consultancy", "Larsen & Toubro", "L&T", ITC, Axis Bank, Kotak Mahindra, SBI, "State Bank of India", "Mahindra & Mahindra", Bajaj Finance, Hindustan Unilever, HCLTech, Sun Pharma]
   rbi_policy: [RBI, "repo rate", "monetary policy", MPC, "Reserve Bank", "CRR", "liquidity"]
   sebi: [SEBI, "F&O", derivatives, "expiry", "lot size", "margin rules"]

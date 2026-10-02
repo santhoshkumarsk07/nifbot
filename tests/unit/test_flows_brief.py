@@ -151,3 +151,16 @@ def test_brief_full_and_tilt() -> None:
 def test_news_alert_format() -> None:
     msg = news_alert(_news(-0.5, "high"))
     assert msg.startswith("[-] NEWS (high)") and "https://x.test/1" in msg and "ET" in msg
+
+
+def test_stale_cues_shown_but_not_used_in_tilt() -> None:
+    today = date(2026, 10, 2)
+    old_brent = Cue("Brent crude", "DCOILBRENTEU", date(2026, 9, 25), 100, 110, "pct")
+    assert old_brent.is_stale(today) and "STALE" in old_brent.render(today)
+    assert "STALE" not in old_brent.render()
+    inp = BriefInputs(day=today, cues=[old_brent])
+    assert premarket_tilt(inp) == (0.0, [])
+    assert "not used in the tilt" in premarket_brief(inp)
+    fresh = Cue("Brent crude", "DCOILBRENTEU", date(2026, 9, 30), 100, 110, "pct")
+    assert not fresh.is_stale(today)
+    assert premarket_tilt(BriefInputs(day=today, cues=[fresh]))[1] == ["Brent +"]

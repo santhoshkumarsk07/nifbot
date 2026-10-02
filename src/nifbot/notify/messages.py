@@ -52,10 +52,11 @@ def premarket_tilt(inp: BriefInputs) -> tuple[float, list[str]]:
     is capped so no single input dominates.
     """
     parts: list[tuple[str, float]] = []
-    us = [c.change for c in inp.cues if c.series in US_SERIES]
+    fresh = [c for c in inp.cues if not c.is_stale(inp.day)]  # stale cues never count
+    us = [c.change for c in fresh if c.series in US_SERIES]
     if us:
         parts.append(("US indices", max(-1.0, min(1.0, sum(us) / len(us) / 1.0))))
-    for c in inp.cues:
+    for c in fresh:
         if c.series == "NIKKEI225":
             parts.append(("Nikkei", max(-1.0, min(1.0, c.change / 1.5)) * 0.5))
         if c.series == "DCOILBRENTEU":
@@ -81,7 +82,9 @@ def premarket_brief(inp: BriefInputs, max_news: int = 6) -> str:
     if not inp.holiday_list_verified:
         lines.append("Note: holiday list not yet verified against the NSE circular.")
     lines.append("Global cues (last close, source FRED):")
-    lines += [f"  {c.render()}" for c in inp.cues] or ["  not available"]
+    lines += [f"  {c.render(inp.day)}" for c in inp.cues] or ["  not available"]
+    if any(c.is_stale(inp.day) for c in inp.cues):
+        lines.append("  (STALE values are shown for context but not used in the tilt)")
     if inp.missing_cues:
         lines.append(f"  not available: {', '.join(inp.missing_cues)}")
     if inp.gift_nifty:

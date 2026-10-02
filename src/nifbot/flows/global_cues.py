@@ -14,6 +14,8 @@ from datetime import date
 
 from nifbot.net import Fetcher, FetchError
 
+STALE_DAYS = 4  # covers a weekend plus one holiday
+
 URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
 
 # label, FRED series id, unit ("pct" = show % change; "level" = show bp change)
@@ -45,10 +47,17 @@ class Cue:
             return (self.value - self.prev) * 100
         return (self.value / self.prev - 1) * 100 if self.prev else 0.0
 
-    def render(self) -> str:
+    def is_stale(self, today: date, max_age_days: int = STALE_DAYS) -> bool:
+        """Older than ``max_age_days`` calendar days (FRED lags for some series)."""
+        return (today - self.as_of).days > max_age_days
+
+    def render(self, today: date | None = None) -> str:
+        stale = " STALE" if today is not None and self.is_stale(today) else ""
         if self.unit == "level":
-            return f"{self.label}: {self.value:.2f}% ({self.change:+.0f} bp) [{self.as_of:%d %b}]"
-        return f"{self.label}: {self.value:,.2f} ({self.change:+.2f}%) [{self.as_of:%d %b}]"
+            txt = f"{self.label}: {self.value:.2f}% ({self.change:+.0f} bp)"
+        else:
+            txt = f"{self.label}: {self.value:,.2f} ({self.change:+.2f}%)"
+        return f"{txt} [{self.as_of:%d %b}{stale}]"
 
 
 def parse_fred_csv(text: str) -> list[tuple[date, float]]:

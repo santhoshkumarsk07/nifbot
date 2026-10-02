@@ -222,3 +222,13 @@ def test_news_config_validation(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError):
         load_news_config(p)
+
+
+def test_score_does_not_saturate_and_fades() -> None:
+    many = [_scored(f"news {i}", -0.6, "high", NOW) for i in range(30)]
+    s = news_score(many, NOW)
+    assert -0.6 <= s < -0.55  # close to the mean tone, not pinned at -1
+    one = news_score(many[:1], NOW)
+    assert -0.6 < one < 0  # a single headline counts less than thirty
+    assert abs(news_score(many, NOW + timedelta(hours=24))) < 0.05  # fades with age
+    assert news_score([], NOW) == 0.0
