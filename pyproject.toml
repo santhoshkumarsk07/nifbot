@@ -46,6 +46,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/nifbot"]
 
+[tool.uv]
+# Copy instead of hardlinking from uv's cache: hardlinks fail on Windows when the cache or
+# project touches OneDrive/cloud-synced folders (os error 396).
+link-mode = "copy"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
