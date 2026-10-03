@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import sys
 import threading
 from datetime import date, datetime, timedelta
@@ -14,7 +15,8 @@ import pandas as pd
 from nifbot import DISCLAIMER, readiness, selftest, services
 from nifbot.config import PROJECT_ROOT, Secrets, Settings, insecure_permissions, load_settings
 from nifbot.data.adapter import DataError
-from nifbot.data.factory import dhan_adapter, dhan_client
+from nifbot.data.dhan_auth import token_expiry
+from nifbot.data.factory import dhan_adapter, dhan_client, token_manager
 from nifbot.data.history import DhanHistory, RollingSpec, relative_strikes
 from nifbot.data.models import Snapshot
 from nifbot.data.recorder import (
@@ -513,7 +515,12 @@ def cmd_data_check(_args: argparse.Namespace) -> int:
     data_root = PROJECT_ROOT / "data"
     hist_checks, days = readiness.check_history(data_root / "history" / "dhan", cal, today)
     checks = [
-        *readiness.check_environment(secrets, data_root, PROJECT_ROOT / settings.recorder.data_dir),
+        *readiness.check_environment(
+            secrets,
+            data_root,
+            PROJECT_ROOT / settings.recorder.data_dir,
+            PROJECT_ROOT / "data" / "secrets" / "dhan_token.json",
+        ),
         *readiness.check_config(cal, min(days) if days else None, today),
         *hist_checks,
         readiness.check_features(data_root / "features" / "history.parquet"),
@@ -550,6 +557,73 @@ def cmd_selftest(args: argparse.Namespace) -> int:
         "ALL PASSED" if not failed else f"FAILED: {', '.join(failed)} (paste this output in chat)"
     )
     return 0 if not failed else 1
+
+
+def _alert(settings: Settings, secrets: Secrets, text: str) -> None:
+    """Best-effort Telegram alert (never raises)."""
+    try:
+        bot = _bot(settings, secrets)
+        bot.broadcast(text)
+        bot.close()
+    except TelegramError as exc:
+        print(f"(telegram alert not sent: {exc})")
+
+
+def cmd_dhan_token(args: argparse.Namespace) -> int:
+    """Show the Dhan token expiry; renew it when due (or always with --renew)."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    try:
+        manager = token_manager(settings, secrets)
+    except DataError as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    now = now_ist()
+    cur = manager.current()
+    try:
+        if cur is None:
+            raise DataError("no Dhan token yet. Run `nifbot dhan-login`")
+        left = cur.remaining(now)
+        if left is not None and left <= timedelta(0):
+            token = manager.ensure_valid()  # auto-login if enabled, else raises
+        elif args.renew and left is not None:
+            token = manager.renew(cur.token)
+        else:
+            token = manager.ensure_valid()
+    except DataError as exc:
+        manager.close()
+        print(f"FAIL: {exc}")
+        _alert(settings, secrets, f"Dhan token problem: {exc}\nNo live data until fixed.")
+        return 1
+    manager.close()
+    exp = token_expiry(token)
+    renewed = cur is None or token != cur.token
+    print(
+        f"Dhan token OK{' (renewed)' if renewed else ''}; expires {exp:%a %d %b %H:%M} IST"
+        if exp
+        else "Dhan token OK (expiry unknown)"
+    )
+    return 0
+
+
+def cmd_dhan_login(_args: argparse.Namespace) -> int:
+    """New Dhan token from PIN + authenticator code. Nothing you type is stored."""
+    settings, secrets = load_settings(), _secrets()
+    _init_logging(secrets)
+    try:
+        manager = token_manager(settings, secrets)
+        pin = getpass.getpass("Dhan PIN (hidden): ").strip()
+        totp = input("6-digit code from your authenticator app: ").strip()
+        token = manager.login_pin_totp(pin, totp)
+    except DataError as exc:
+        print(f"FAIL: {exc}")
+        return 1
+    finally:
+        pin = totp = ""
+    manager.close()
+    exp = token_expiry(token)
+    print(f"logged in; token saved, expires {exp:%a %d %b %H:%M} IST" if exp else "logged in")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -597,6 +671,12 @@ def build_parser() -> argparse.ArgumentParser:
     fb.add_argument("--end", help="YYYY-MM-DD (default: yesterday)")
     fb.add_argument("--years", type=int, default=3)
     fb.set_defaults(func=cmd_flows_backfill)
+    dt = sub.add_parser("dhan-token", help="show Dhan token expiry; renew when due")
+    dt.add_argument("--renew", action="store_true", help="renew now even if not due")
+    dt.set_defaults(func=cmd_dhan_token)
+    sub.add_parser("dhan-login", help="new Dhan token from PIN + TOTP code").set_defaults(
+        func=cmd_dhan_login
+    )
     st = sub.add_parser("selftest", help="try every live connection once")
     st.add_argument("--no-telegram", action="store_true", help="skip the Telegram message")
     st.set_defaults(func=cmd_selftest)

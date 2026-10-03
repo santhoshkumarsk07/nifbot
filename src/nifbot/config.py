@@ -72,6 +72,8 @@ class DhanSettings(_Strict):
     quote_min_interval_seconds: float = Field(ge=0)
     chain_min_interval_seconds: float = Field(ge=0)
     history_min_interval_seconds: float = Field(ge=0)
+    renew_before_hours: float = Field(default=8.0, gt=0, le=23)
+    auto_login_totp: bool = False
 
     @field_validator("base_url", "scrip_master_url")
     @classmethod
@@ -170,6 +172,8 @@ class Secrets(BaseSettings):
     telegram_allowed_chat_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
     dhan_client_id: SecretStr | None = None
     dhan_access_token: SecretStr | None = None
+    dhan_pin: SecretStr | None = None  # only for optional auto-login
+    dhan_totp_secret: SecretStr | None = None  # only for optional auto-login
 
     @field_validator("telegram_allowed_chat_ids", mode="before")
     @classmethod
@@ -182,7 +186,13 @@ class Secrets(BaseSettings):
 
     def secret_values(self) -> list[str]:
         """All configured secret strings, for log redaction."""
-        values = [self.telegram_bot_token, self.dhan_client_id, self.dhan_access_token]
+        values = [
+            self.telegram_bot_token,
+            self.dhan_client_id,
+            self.dhan_access_token,
+            self.dhan_pin,
+            self.dhan_totp_secret,
+        ]
         return [v.get_secret_value() for v in values if v is not None and v.get_secret_value()]
 
 

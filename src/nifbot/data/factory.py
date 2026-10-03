@@ -2,23 +2,50 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
-from nifbot.config import Secrets, Settings
+from pydantic import SecretStr
+
+from nifbot.config import PROJECT_ROOT, Secrets, Settings
 from nifbot.data.adapter import DataError
 from nifbot.data.dhan import DhanAdapter, DhanClient, RawHook
+from nifbot.data.dhan_auth import TokenManager, TokenStore
 from nifbot.data.scrip_master import current_future, download_scrip_master, nifty_futures
 from nifbot.timeutil import now_ist
 
+TOKEN_FILE = PROJECT_ROOT / "data" / "secrets" / "dhan_token.json"
+
+
+def _plain(value: SecretStr | None) -> str | None:
+    return value.get_secret_value() if value is not None else None
+
+
+def token_manager(
+    settings: Settings, secrets: Secrets, store_path: Path | None = None
+) -> TokenManager:
+    cfg = settings.broker.dhan
+    return TokenManager(
+        _plain(secrets.dhan_client_id) or "",
+        TokenStore(store_path or TOKEN_FILE),
+        _plain(secrets.dhan_access_token),
+        renew_before=timedelta(hours=cfg.renew_before_hours),
+        pin=_plain(secrets.dhan_pin),
+        totp_secret=_plain(secrets.dhan_totp_secret),
+        auto_login_totp=cfg.auto_login_totp,
+    )
+
 
 def dhan_client(settings: Settings, secrets: Secrets, on_raw: RawHook | None = None) -> DhanClient:
-    if secrets.dhan_client_id is None or secrets.dhan_access_token is None:
-        raise DataError("DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN are not set in .env")
+    if secrets.dhan_client_id is None:
+        raise DataError("DHAN_CLIENT_ID is not set in .env")
+    manager = token_manager(settings, secrets)
+    try:
+        token = manager.ensure_valid()
+    finally:
+        manager.close()
     return DhanClient(
-        secrets.dhan_client_id.get_secret_value(),
-        secrets.dhan_access_token.get_secret_value(),
-        settings.broker.dhan,
-        on_raw=on_raw,
+        secrets.dhan_client_id.get_secret_value(), token, settings.broker.dhan, on_raw=on_raw
     )
 
 

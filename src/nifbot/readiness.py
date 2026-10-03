@@ -17,7 +17,9 @@ from typing import Literal
 import pandas as pd
 
 from nifbot.config import CONFIG_DIR, Secrets, load_yaml
+from nifbot.data.dhan_auth import TokenStore, token_expiry
 from nifbot.flows.store import FlowStore
+from nifbot.timeutil import now_ist
 from nifbot.trading_calendar import CalendarError, TradingCalendar
 
 Status = Literal["OK", "WARN", "MISSING", "INFO"]
@@ -195,17 +197,23 @@ def check_config(cal: TradingCalendar, first: date | None, today: date) -> list[
     return out
 
 
-def check_environment(secrets: Secrets, data_root: Path, recorded_dir: Path) -> list[Check]:
-    out = [
-        Check(
-            "Dhan credentials",
-            "OK" if secrets.dhan_client_id and secrets.dhan_access_token else "MISSING",
-            "set in .env"
-            if secrets.dhan_access_token
-            else "DHAN_CLIENT_ID / DHAN_ACCESS_TOKEN not set",
-            "put a fresh token in .env (tokens expire daily)",
-        )
-    ]
+def check_environment(
+    secrets: Secrets, data_root: Path, recorded_dir: Path, token_file: Path | None = None
+) -> list[Check]:
+    store = TokenStore(token_file) if token_file else None
+    tok = (store.load() if store else None) or (
+        secrets.dhan_access_token.get_secret_value() if secrets.dhan_access_token else None
+    )
+    exp = token_expiry(tok) if tok else None
+    if not secrets.dhan_client_id or not tok:
+        status: Status = "MISSING"
+        detail = "DHAN_CLIENT_ID or access token not set"
+    elif exp is not None and exp <= now_ist():
+        status, detail = "MISSING", f"token expired {exp:%d %b %H:%M}"
+    else:
+        status = "OK"
+        detail = f"token valid until {exp:%d %b %H:%M}" if exp else "token set"
+    out = [Check("Dhan credentials", status, detail, "uv run nifbot dhan-login")]
     days = (
         sorted(p.name for p in recorded_dir.iterdir() if p.is_dir())
         if recorded_dir.exists()

@@ -1,4 +1,4 @@
-.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send features features-history prepare-data selftest data-check flows-backfill backtest train report paper live
+.PHONY: setup test lint check calendar tg-whoami tg-test audit record record-once compact fetch-history news-once news-watch news-health flows-fetch brief brief-send features features-history prepare-data selftest data-check flows-backfill dhan-token dhan-login morning backtest train report paper live
 
 setup:            ## install pinned deps + git hooks
 	uv sync
@@ -70,6 +70,16 @@ prepare-data:     ## ONE command: history + expired options + FII positioning hi
 	-uv run nifbot flows-backfill
 	uv run nifbot features-history
 	-uv run nifbot data-check
+
+dhan-token:       ## show Dhan token expiry; renews automatically when < 8 h left
+	uv run nifbot dhan-token
+
+dhan-login:       ## new Dhan token from PIN + authenticator code (if it expired)
+	uv run nifbot dhan-login
+
+morning:          ## 08:30: renew Dhan token, then send the pre-market brief
+	uv run nifbot dhan-token
+	uv run nifbot brief --send
 
 selftest:         ## try every live connection once (Telegram, Dhan, NSE, FRED, news)
 	uv run nifbot selftest

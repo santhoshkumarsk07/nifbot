@@ -29,7 +29,9 @@ Every command works as `make <name>` or, on Windows without make, `uv run nifbot
 | When | Command | What it does |
 |---|---|---|
 | Once | `make setup` | installs everything |
-| Each trading day, before 09:00 | put a fresh Dhan token in `.env` | Dhan tokens last ~1 day |
+| First time only | put a Dhan token in `.env` | after that the bot renews it itself |
+| Each trading day 08:30 | `make morning` | renews the Dhan token (if < 8 h left), sends the brief |
+| Only if the token expired | `make dhan-login` | PIN + 6-digit authenticator code, 15 seconds |
 | Once | `make selftest` | tries Telegram, Dhan live + history, NSE, FRED and news once; PASS/FAIL each |
 | Once (takes 30-60 min) | `make prepare-data` | downloads ~3 years of Dhan history incl. expired options, then builds the training feature table `data/features/history.parquet` |
 | 08:45 | `make brief-send` | pre-market brief to Telegram |
@@ -92,6 +94,25 @@ Only market-data endpoints are called. Order placement is disabled in config
 
 Raw API responses are stored next to the parsed data (`raw.jsonl`), so if Dhan changes a
 field name nothing is lost and the day can be re-parsed.
+
+### Dhan token: no daily copy-paste
+
+Dhan access tokens last about 24 hours. The bot handles this:
+
+1. **Automatic renewal.** Every Dhan call checks the token's expiry. With less than 8 hours
+   left it calls Dhan's `RenewToken` and saves the new token in
+   `data/secrets/dhan_token.json` (permissions 600, never committed). Run `make morning` (or
+   `uv run nifbot dhan-token`) each trading day, e.g. from Windows Task Scheduler at 08:30, and
+   the token keeps rolling forward.
+2. **If it expired anyway** (PC off for a day, holiday): `make dhan-login` asks for your Dhan
+   PIN (hidden) and the 6-digit code from your authenticator app. Nothing you type is stored.
+   If renewal fails at 08:30 you also get a Telegram message.
+3. **Optional, OFF by default: fully automatic login.** Put `DHAN_PIN` and `DHAN_TOTP_SECRET`
+   (the secret shown when you set up TOTP in Dhan) in `.env` and set
+   `broker.dhan.auto_login_totp: true`. Risk: anyone who can read `.env` can log in to your Dhan
+   account. Only use it on a machine only you can access.
+
+Check any time with `make dhan-token`: it prints when the token expires.
 
 ### Historical data from Dhan
 

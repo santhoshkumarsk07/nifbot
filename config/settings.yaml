@@ -37,6 +37,8 @@ broker:
     quote_min_interval_seconds: 1.0    # Dhan market-quote limit: 1 request/second
     chain_min_interval_seconds: 3.0    # Dhan option-chain limit: 1 request/3 seconds
     history_min_interval_seconds: 0.5
+    renew_before_hours: 8          # renew when less than this is left (covers a full session)
+    auto_login_totp: false         # true = log in by itself with DHAN_PIN + DHAN_TOTP_SECRET (risky)
 
 order_placement:
   enabled: false               # never enable without explicit owner approval
