@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import csv
 import io
+import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -87,6 +88,20 @@ def parse(text: str, day: date) -> dict[str, ParticipantOI]:
     if "FII" not in out:
         raise ParticipantOIError("participant OI: FII row missing")
     return out
+
+
+_FILE_RE = re.compile(r"fao_participant_oi_(\d{2})(\d{2})(\d{4})", re.IGNORECASE)
+
+
+def day_from_filename(name: str) -> date | None:
+    """Trading date from an NSE file name like ``fao_participant_oi_01102026.csv``."""
+    m = _FILE_RE.search(name)
+    if not m:
+        return None
+    try:
+        return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        return None
 
 
 def fetch(fetcher: Fetcher, day: date) -> dict[str, ParticipantOI]:

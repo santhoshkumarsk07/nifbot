@@ -54,6 +54,7 @@ class Fetcher:
         self._clock = clock
         self._last: dict[str, float] = {}
         self._robots: dict[str, RobotFileParser | None] = {}
+        self._robots_why: dict[str, str] = {}
 
     def close(self) -> None:
         self._client.close()
@@ -91,7 +92,8 @@ class Fetcher:
         parser = RobotFileParser()
         try:
             resp = self._raw_get(f"{base}/robots.txt")
-        except FetchError:
+        except FetchError as exc:
+            self._robots_why[base] = f"robots.txt unreadable ({exc})"
             return None
         if resp.status_code == 200:
             parser.parse(resp.text.splitlines())
@@ -99,6 +101,7 @@ class Fetcher:
         if resp.status_code in (404, 410):
             parser.parse([])  # empty robots.txt allows everything
             return parser
+        self._robots_why[base] = f"robots.txt unreadable (HTTP {resp.status_code}); not fetching"
         return None
 
     def allowed(self, url: str) -> bool:
@@ -117,7 +120,11 @@ class Fetcher:
         if not url.startswith("https://"):
             raise FetchError("only https:// URLs are allowed")
         if not self.allowed(url):
-            raise FetchError(f"{urlsplit(url).netloc}: disallowed by robots.txt or unreadable")
+            parts = urlsplit(url)
+            why = self._robots_why.get(
+                f"{parts.scheme}://{parts.netloc}", "robots.txt disallows this URL"
+            )
+            raise FetchError(f"{parts.netloc}: {why}")
         resp = self._raw_get(url)
         if resp.status_code != 200:
             raise FetchError(f"{urlsplit(url).netloc}: HTTP {resp.status_code}")

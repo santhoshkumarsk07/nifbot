@@ -36,6 +36,7 @@ from nifbot.features.inputs import (
     chain_from_snapshots,
     daily_context,
 )
+from nifbot.flows import participant_oi
 from nifbot.flows.fii_dii import CashFlow
 from nifbot.flows.store import FlowStore
 from nifbot.logging_setup import setup_logging
@@ -368,6 +369,33 @@ def cmd_flows_fetch(args: argparse.Namespace) -> int:
     return 1 if any("FAILED" in line for line in lines) else 0
 
 
+def cmd_flows_import(args: argparse.Namespace) -> int:
+    """Import participant OI CSVs you downloaded from the NSE website."""
+    settings = load_settings()
+    folder = Path(args.folder)
+    files = sorted(folder.glob("*.csv")) if folder.is_dir() else []
+    if not files:
+        print(f"FAIL: no .csv files in {folder}")
+        return 1
+    store = FlowStore(services.open_db(settings))
+    ok, bad = 0, []
+    for f in files:
+        day = participant_oi.day_from_filename(f.name)
+        if day is None:
+            bad.append(f"{f.name}: name must look like fao_participant_oi_DDMMYYYY.csv")
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+            store.add_participant(participant_oi.parse(text, day))
+            ok += 1
+        except participant_oi.ParticipantOIError as exc:
+            bad.append(f"{f.name}: {exc}")
+    print(f"imported {ok} day(s), skipped {len(bad)}")
+    for line in bad[:10]:
+        print(f"  {line}")
+    return 0 if ok else 1
+
+
 def cmd_flows_add(args: argparse.Namespace) -> int:
     """Manually enter FII/DII net cash flows (₹ crore) for a day."""
     settings = load_settings()
@@ -661,6 +689,9 @@ def build_parser() -> argparse.ArgumentParser:
     ff = sub.add_parser("flows-fetch", help="participant OI (+FII/DII if enabled)")
     ff.add_argument("date", nargs="?", help="YYYY-MM-DD (default: previous trading day)")
     ff.set_defaults(func=cmd_flows_fetch)
+    fi = sub.add_parser("flows-import", help="import NSE participant OI CSVs from a folder")
+    fi.add_argument("folder", help="folder with fao_participant_oi_DDMMYYYY.csv files")
+    fi.set_defaults(func=cmd_flows_import)
     fa = sub.add_parser("flows-add", help="enter FII/DII net cash flows manually")
     fa.add_argument("date", help="YYYY-MM-DD")
     fa.add_argument("fii", type=float, help="FII net, Rs crore (negative = selling)")

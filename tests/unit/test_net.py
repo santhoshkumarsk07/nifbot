@@ -78,3 +78,18 @@ def test_https_only_and_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(net, "MAX_BYTES", 5)
     with pytest.raises(FetchError, match="too large"):
         f.get("https://a.test/big")
+
+
+def test_robots_error_says_why() -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.host == "deny.test" and req.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
+        if req.url.path == "/robots.txt":
+            return httpx.Response(403)
+        return httpx.Response(200, content=b"ok")
+
+    f, _ = _fetcher(handler)
+    with pytest.raises(FetchError, match=r"robots\.txt disallows"):
+        f.get("https://deny.test/x")
+    with pytest.raises(FetchError, match=r"unreadable \(HTTP 403\)"):
+        f.get("https://blocked.test/x")

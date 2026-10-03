@@ -210,3 +210,11 @@ def test_selftest_reports_failures(
     monkeypatch.setattr(cli, "Fetcher", lambda: fetcher)
     assert cli.main(["selftest", "--no-telegram"]) == 1
     assert "FAILED:" in capsys.readouterr().out
+
+
+def test_selftest_hints() -> None:
+    def boom() -> str:
+        raise RuntimeError("/charts/intraday: HTTP 401 DH-902 not subscribed")
+
+    r = selftest._run("dhan history", boom)
+    assert not r.ok and "Data API subscription" in r.detail

@@ -114,3 +114,18 @@ def test_brief_skips_holiday(
     assert "not a trading day" in capsys.readouterr().out
     monkeypatch.setattr(cli, "now_ist", lambda: datetime(2031, 1, 6, 8, 45, tzinfo=IST))
     assert cli.main(["brief"]) == 1
+
+
+def test_flows_import(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    folder = tmp_path / "nse"
+    folder.mkdir()
+    (folder / "fao_participant_oi_01102026.csv").write_text(PARTICIPANT_CSV)
+    (folder / "random.csv").write_text("x")
+    (folder / "fao_participant_oi_02102026.csv").write_text("garbage")
+    assert cli.main(["flows-import", str(folder)]) == 0
+    out = capsys.readouterr().out
+    assert "imported 1 day(s), skipped 2" in out
+    assert cli.main(["flows-import", str(tmp_path / "empty")]) == 1
+    from nifbot.flows.participant_oi import day_from_filename
+
+    assert day_from_filename("fao_participant_oi_31022026.csv") is None

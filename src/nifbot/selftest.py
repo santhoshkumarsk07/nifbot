@@ -33,11 +33,22 @@ class Result:
     detail: str
 
 
+HINTS = {
+    "DH-902": "Dhan Data API subscription is not active on this account (Dhan web -> DhanHQ "
+    "Trading APIs -> Data APIs).",
+    "HTTP 401": "Dhan rejected the request: usually the Data API subscription is not active, "
+    "or the token belongs to another client ID.",
+    "robots.txt": "the site does not allow automated downloads; use the manual import instead.",
+}
+
+
 def _run(name: str, fn: Callable[[], str]) -> Result:
     try:
         return Result(name, True, fn())
     except Exception as exc:
-        return Result(name, False, f"{type(exc).__name__}: {str(exc)[:200]}")
+        msg = f"{type(exc).__name__}: {str(exc)[:200]}"
+        hint = next((h for key, h in HINTS.items() if key in msg), "")
+        return Result(name, False, f"{msg}\n         -> {hint}" if hint else msg)
 
 
 def run_selftest(

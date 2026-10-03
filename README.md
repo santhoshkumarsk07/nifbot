@@ -154,6 +154,9 @@ make news-watch    # run all session: high-impact news alerts to Telegram as the
 - **Global cues:** FRED (US Federal Reserve data, official and free): S&P 500, Dow, Nasdaq,
   Nikkei, Brent, US 10Y, dollar index, USD/INR. Values are previous closes and show their date.
 - **GIFT Nifty:** no free official feed, so the brief shows "not available".
+- **If NSE blocks automated downloads** (`selftest` says robots.txt): open nseindia.com ->
+  All Reports -> Derivatives -> "F&O - Participant wise Open Interest", download the CSVs
+  (`fao_participant_oi_DDMMYYYY.csv`) into a folder, then `uv run nifbot flows-import <folder>`.
 - **FII/DII cash flows:** NSE publishes these only on its website, whose terms restrict
   automated access, so the connector is off (`flows.fii_dii_enabled: false`). Enter the daily
   figures with `uv run nifbot flows-add 2026-10-01 -- -2500 3000` (FII, DII in Rs crore), or
